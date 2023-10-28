@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absensi QR Code</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>    
+</head>
+
+<body>
+
+    <div class="container">
+        <div class="row justify-content-center align-items-center" style="height: 100vh;">
+            <div class="col-md-8 text-center">
+                <h1>Absensi QR Code</h1>
+                <h4 id="current-time"></h4>
+                <div id="qr-reader" class="mb-4 d-flex justify-content-center">
+                    <video id="video-element" class="w-100" style="min-width: 300px;"></video>
+                </div>
+                <div class="d-flex justify-content-center">
+                    <button id="start-scan" class="btn btn-primary">Aktifkan Kamera</button>
+                    <a href="data-absensi"  class="btn btn-primary ml-2">Lihat History Absensi</a>
+                </div>
+            </div>
+        </div>
+    </div>    
+    <script src="https://rawgit.com/schmich/instascan-builds/master/instascan.min.js"></script>
+    <script>
+        const scanner = new Instascan.Scanner({ video: document.getElementById('video-element') });
+
+        let scanTimeout; // Variabel untuk menyimpan referensi timer
+
+        document.getElementById('start-scan').addEventListener('click', function () {
+            Instascan.Camera.getCameras().then(function (cameras) {
+                if (cameras.length > 0) {
+                    scanner.start(cameras[0]);
+                    document.getElementById('start-scan').style.display = 'none'; // Sembunyikan tombol setelah memulai pemindaian
+                    
+                    // Set timer untuk 10 detik (10000 milidetik)
+                    scanTimeout = setTimeout(function() {
+                        scanner.stop(); // Hentikan pemindaian
+                        document.getElementById('start-scan').style.display = ''; // Tampilkan tombol kembali
+                        Swal.fire({ // Gunakan sweetalert2 untuk memberi tahu pengguna
+                            icon: 'info',
+                            title: 'Timeout',
+                            text: 'Pemindaian dibatalkan karena tidak ada aktivitas.'
+                        });
+                    }, 10000);
+                } else {
+                    console.error('No cameras found.');
+                }
+            }).catch(function (e) {
+                console.error(e);
+            });
+        });
+
+        // Fungsi untuk memperbarui tampilan jam
+        function updateClock() {
+            const now = new Date();
+            const timeString = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+            document.getElementById('current-time').textContent = timeString;
+        }
+        updateClock(); // Panggil fungsi saat pertama kali halaman dimuat
+        setInterval(updateClock, 1000); // Perbarui tampilan jam setiap detik
+
+        scanner.addListener('scan', function (content) {
+            clearTimeout(scanTimeout); // Batalkan timeout jika ada aktivitas pemindaian
+
+            fetch('process.php', {
+                method: 'POST',
+                body: JSON.stringify({ email: content }),
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Sukses',
+                        text: data.message
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Kesalahan',
+                        text: data.message
+                    });
+                }
+
+                // Hentikan pemindaian dan tampilkan tombol kembali
+                scanner.stop();
+                document.getElementById('start-scan').style.display = 'block';
+
+            });
+            // .catch(error => {
+            //     console.error(error);
+            //     Swal.fire({
+            //         icon: 'error',
+            //         title: 'Kesalahan',
+            //         text: 'Terjadi kesalahan saat memproses data.'
+            //     });
+            // });
+        });
+
+    </script>
+</body>
+</html>
